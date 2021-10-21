@@ -86,23 +86,41 @@ class range_string
     std::string str;
     double& value;
     double min_range, max_range;
-    range_string(double& v) : value(v) {}
-    bool parse()
+    std::string name;
+    range_string(std::string n, double& v) : name(n), value(v) {}
+    void parse()
     {        
-        if (sscanf(str.c_str(), "%lf:%lf", &min_range, &max_range) == 2)
+        if (str.empty())
         {
-            return true;
-        }
-        else
-        {
-            sscanf(str.c_str(), "%lf", &value);
             min_range = max_range = value;
-            return false;
+            return;
+        }
+        if (sscanf(str.c_str(), "%lf:%lf", &min_range, &max_range) != 2)
+        {
+            if (sscanf(str.c_str(), "%lf", &value) != 1)
+            {
+                printf("Can't parse \"%s\" for parameter --%s\n", str.c_str(), name.c_str());
+                throw std::runtime_error("Error parsing parameter");
+            }
+            min_range = max_range = value;
         }
     }
     void interp(int frame_num, int frames)
     {
-        value = min_range + (max_range - min_range) * (double(frame_num) / double(frames));
+        if (frame_num == 0 && frames == 0)
+        {
+            frames = 1;
+        }
+        value = min_range + (max_range - min_range) * (double(frame_num) / double(frames - 1));
+        if (max_range == min_range)
+        {
+            printf("%s = %lf\n", name.c_str(), value);
+        }
+        else
+        {
+            printf("%s = %lf (%lf->%lf) frame %d of %d\n", name.c_str(), value, min_range, max_range, frame_num+1, frames);
+        }
+        
     }
 };
 
@@ -111,17 +129,17 @@ int main(int argc, char *argv[])
 
     argstream::argstream<char> as(argc, argv);
 
-    range_string scale_str(scale);
-    range_string real_ellipse_factor_str(real_ellipse_factor);
-    range_string imag_ellipse_factor_str(imag_ellipse_factor);
-    range_string spiral_scale_str(spiral_scale);
-    range_string spiral_scale_factor_str(spiral_scale_factor);
-    range_string rotation_str(rotation);
-    range_string saturation_str(saturation);
-    range_string value_str(value);
-    range_string start_hue_str(start_hue);
-    range_string hue_multiplier_str(hue_multiplier);
-    range_string overlap_str(overlap);
+    range_string scale_str("scale",scale);
+    range_string real_ellipse_factor_str("real_ellipse_factor",real_ellipse_factor);
+    range_string imag_ellipse_factor_str("imag_ellipse_factor", imag_ellipse_factor);
+    range_string spiral_scale_str("spiral_scale", spiral_scale);
+    range_string spiral_scale_factor_str("spiral_scale_factor", spiral_scale_factor);
+    range_string rotation_str("rotation", rotation);
+    range_string saturation_str("saturation", saturation);
+    range_string value_str("value", value);
+    range_string start_hue_str("start_hue", start_hue);
+    range_string hue_multiplier_str("hue_multiplier", hue_multiplier);
+    range_string overlap_str("overlap", overlap);
 
     std::vector<range_string*> range_strings{
         & scale_str,
@@ -168,6 +186,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Please specify output file\n");
 		return 1;
 	}
+    
+    double aspect = double(iWidth) / double(iHeight);
 
     for(int frame_num = 0; frame_num < frames; frame_num++)
     {
@@ -246,6 +266,7 @@ int main(int argc, char *argv[])
                     for(int y = 0; y < iHeight ; y++)
                     {
                         std::complex<double> xn( double(x - iWidth/2) / double(iWidth / 2), double(y - iHeight/2) / double(iHeight / 2) );
+                        xn.real(xn.real() * aspect);
                         xn *= scale;
                         xn += offset;
                         int i = 0;
